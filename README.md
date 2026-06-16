@@ -62,6 +62,15 @@ Instale dependencias:
 pip install -r requirements.txt
 ```
 
+
+## Archivos grandes y .gitignore
+
+No se recomienda subir límites cantonales grandes al repositorio. Los archivos `.geojson`, `.gpkg`, `.zip` y shapefiles deben colocarse localmente dentro de `inputs/`. La carpeta `inputs/` se mantiene en Git gracias a `inputs/.gitkeep`.
+
+Los resultados se generan localmente en `outputs/`, los checkpoints se generan localmente en `checkpoints/` y los logs se generan localmente en `logs/`. Estos archivos están ignorados para evitar problemas con el límite de tamaño de GitHub.
+
+Si se usa GitHub Codespaces, se puede arrastrar el archivo grande directamente a `inputs/`, ejecutarlo ahí y no hacer commit de ese archivo.
+
 ## Preparar inputs
 
 1. Coloque el límite cantonal en `inputs/`.
