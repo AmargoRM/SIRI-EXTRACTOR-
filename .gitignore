@@ -1,0 +1,28 @@
+# Archivos grandes de entrada
+inputs/*.geojson
+inputs/*.json
+inputs/*.gpkg
+inputs/*.zip
+inputs/*.shp
+inputs/*.dbf
+inputs/*.shx
+inputs/*.prj
+inputs/*.cpg
+
+# Resultados generados
+outputs/*
+checkpoints/*
+logs/*
+
+# Mantener carpetas en Git
+!outputs/.gitkeep
+!checkpoints/.gitkeep
+!logs/.gitkeep
+!inputs/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
