@@ -1,13 +1,6 @@
 # Archivos grandes de entrada
-inputs/*.geojson
-inputs/*.json
-inputs/*.gpkg
-inputs/*.zip
-inputs/*.shp
-inputs/*.dbf
-inputs/*.shx
-inputs/*.prj
-inputs/*.cpg
+# Los insumos geoespaciales en inputs/ se versionan con Git LFS; ver .gitattributes.
+# No se ignoran para poder agregarlos con `git add inputs/<archivo>` desde la CLI.
 
 # Resultados generados
 outputs/*
