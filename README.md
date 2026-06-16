@@ -73,6 +73,8 @@ Los resultados se generan localmente en `outputs/`, los checkpoints se generan l
 
 Si se usa GitHub Codespaces, no use la pantalla web de GitHub `upload/main/inputs` para subir el límite cantonal grande. Abra el Codespace, use el Explorador de VS Code dentro del Codespace y arrastre el archivo grande directamente a la carpeta `inputs/` del entorno de trabajo. Ejecute la herramienta ahí y no haga commit de ese archivo; `.gitignore` hará que Git no lo incluya en los cambios.
 
+Si aparece un conflicto al actualizar la rama, deje únicamente esta sección consolidada y elimine los separadores generados por Git antes de hacer commit.
+
 ## Preparar inputs
 
 1. Coloque el límite cantonal en `inputs/`.
