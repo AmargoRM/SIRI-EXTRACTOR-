@@ -62,6 +62,17 @@ Instale dependencias:
 pip install -r requirements.txt
 ```
 
+
+## Archivos grandes y .gitignore
+
+No se recomienda subir límites cantonales grandes al repositorio. GitHub no permite cargar archivos grandes desde la interfaz web del repositorio; el mensaje `Yowza, that’s a big file. Try again with a file smaller than 25MB` significa que se está intentando hacer commit de ese archivo en GitHub, no colocarlo como archivo local de trabajo.
+
+Los archivos `.geojson`, `.gpkg`, `.zip` y shapefiles deben colocarse localmente dentro de `inputs/`, pero no deben subirse ni commitearse al repositorio. La carpeta `inputs/` se mantiene en Git gracias a `inputs/.gitkeep`.
+
+Los resultados se generan localmente en `outputs/`, los checkpoints se generan localmente en `checkpoints/` y los logs se generan localmente en `logs/`. Estos archivos están ignorados para evitar problemas con el límite de tamaño de GitHub.
+
+Si se usa GitHub Codespaces, no use la pantalla web de GitHub `upload/main/inputs` para subir el límite cantonal grande. Abra el Codespace, use el Explorador de VS Code dentro del Codespace y arrastre el archivo grande directamente a la carpeta `inputs/` del entorno de trabajo. Ejecute la herramienta ahí y no haga commit de ese archivo; `.gitignore` hará que Git no lo incluya en los cambios.
+
 ## Preparar inputs
 
 1. Coloque el límite cantonal en `inputs/`.
