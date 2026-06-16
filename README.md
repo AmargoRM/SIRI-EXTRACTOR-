@@ -63,13 +63,28 @@ pip install -r requirements.txt
 ```
 
 
-## Archivos grandes y .gitignore
+## Archivos grandes en `inputs/`
 
-No se recomienda subir límites cantonales grandes al repositorio. Los archivos `.geojson`, `.gpkg`, `.zip` y shapefiles deben colocarse localmente dentro de `inputs/`. La carpeta `inputs/` se mantiene en Git gracias a `inputs/.gitkeep`.
+GitHub no permite subir archivos mayores a 25 MB desde la página web de carga. Ese límite es de GitHub y no se puede cambiar desde el código del repositorio.
 
-Los resultados se generan localmente en `outputs/`, los checkpoints se generan localmente en `checkpoints/` y los logs se generan localmente en `logs/`. Estos archivos están ignorados para evitar problemas con el límite de tamaño de GitHub.
+Para admitir límites cantonales pesados en `inputs/`, el repositorio está preparado para usar **Git LFS** con archivos geoespaciales (`.geojson`, `.json`, `.gpkg`, `.zip` y shapefiles). Súbalos desde Git en la terminal, no desde el botón web de GitHub:
 
-Si se usa GitHub Codespaces, se puede arrastrar el archivo grande directamente a `inputs/`, ejecutarlo ahí y no hacer commit de ese archivo.
+```bash
+git lfs install
+git add inputs/mi_limite_cantonal.zip
+git commit -m "Add canton input file"
+git push
+```
+
+Si el archivo ya estaba en `inputs/`, también puede verificar que Git LFS lo reconoce con:
+
+```bash
+git check-attr filter -- inputs/mi_limite_cantonal.zip
+```
+
+Debe responder `filter: lfs`. Si no tiene Git LFS instalado, instálelo antes de agregar archivos pesados. En GitHub Codespaces normalmente está disponible; en una computadora local puede requerir instalarlo desde <https://git-lfs.com/>.
+
+Los resultados se generan localmente en `outputs/`, los checkpoints se generan localmente en `checkpoints/` y los logs se generan localmente en `logs/`. Estos archivos siguen ignorados para evitar subir salidas generadas.
 
 ## Preparar inputs
 

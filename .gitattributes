@@ -1,0 +1,20 @@
+# Git LFS para insumos geoespaciales grandes en inputs/.
+# Permite versionar archivos pesados con Git LFS desde la CLI.
+inputs/*.geojson filter=lfs diff=lfs merge=lfs -text
+inputs/*.json filter=lfs diff=lfs merge=lfs -text
+inputs/*.gpkg filter=lfs diff=lfs merge=lfs -text
+inputs/*.zip filter=lfs diff=lfs merge=lfs -text
+inputs/*.shp filter=lfs diff=lfs merge=lfs -text
+inputs/*.dbf filter=lfs diff=lfs merge=lfs -text
+inputs/*.shx filter=lfs diff=lfs merge=lfs -text
+inputs/*.prj filter=lfs diff=lfs merge=lfs -text
+inputs/*.cpg filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.geojson filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.json filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.gpkg filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.zip filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.shp filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.dbf filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.shx filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.prj filter=lfs diff=lfs merge=lfs -text
+inputs/**/*.cpg filter=lfs diff=lfs merge=lfs -text
