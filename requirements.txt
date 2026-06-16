@@ -1,0 +1,6 @@
+requests
+geopandas
+shapely
+pyproj
+tqdm
+fiona

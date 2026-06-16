@@ -1,0 +1,36 @@
+{
+  "project_name": "Version 1 SIRI EXTRACTOR CLI",
+  "mode": "canton",
+  "resume_from_checkpoint": null,
+  "service": {
+    "base_url": "https://geop8.siri.snitcr.go.cr/GeoP/geoprox2",
+    "service_key": "390c80aJivoGEOSIRI",
+    "layer_name": "catastro"
+  },
+  "area": {
+    "input_file": "inputs/limite_canton.geojson",
+    "name_field": null,
+    "name_value": null,
+    "input_crs_if_missing": "EPSG:5367"
+  },
+  "output": {
+    "output_name": "canton_lambert_norte.geojson",
+    "output_crs": "EPSG:5456",
+    "also_export_gpkg": true,
+    "clip_to_canton": true
+  },
+  "sampling": {
+    "tile_size_m": 250,
+    "grid_size": 8,
+    "passes": 2,
+    "sleep_seconds": 0.45,
+    "max_queries": 1000,
+    "checkpoint_every": 500
+  },
+  "safety": {
+    "max_consecutive_errors": 50,
+    "timeout_seconds": 30,
+    "retry_attempts": 2,
+    "retry_sleep_seconds": 2
+  }
+}
