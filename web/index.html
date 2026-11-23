@@ -11,21 +11,21 @@
     --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5d6670; --line: #dde1e6;
     --accent: #0b6e4f; --accent-ink: #ffffff; --accent-soft: #e3f2ec;
     --warn: #9a5b00; --warn-soft: #fff4e0; --err: #b3261e; --err-soft: #fdecea;
-    --sel: #d9480f; --area: #1864ab;
+    --sel: #d9480f; --area: #1864ab; --off: #868e96;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #121417; --panel: #1b1e22; --ink: #e8eaed; --muted: #9aa3ad; --line: #2e333a;
       --accent: #3cb88a; --accent-ink: #0b1712; --accent-soft: #173328;
       --warn: #f0b45a; --warn-soft: #2e2412; --err: #f28b82; --err-soft: #3a1d1b;
-      --sel: #ff8a4c; --area: #74b3f0;
+      --sel: #ff8a4c; --area: #74b3f0; --off: #6c757d;
     }
   }
   :root[data-theme="dark"] {
     --bg: #121417; --panel: #1b1e22; --ink: #e8eaed; --muted: #9aa3ad; --line: #2e333a;
     --accent: #3cb88a; --accent-ink: #0b1712; --accent-soft: #173328;
     --warn: #f0b45a; --warn-soft: #2e2412; --err: #f28b82; --err-soft: #3a1d1b;
-    --sel: #ff8a4c; --area: #74b3f0;
+    --sel: #ff8a4c; --area: #74b3f0; --off: #6c757d;
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; margin: 0; }
@@ -101,6 +101,7 @@
         <select id="selDist"></select>
       </div>
       <div class="hint">También podés hacer clic sobre el mapa.</div>
+      <div id="cobBox" class="msg warn hidden"></div>
       <div id="selCard" class="card hidden">
         <div class="sel-name" id="selName"></div>
         <div class="muted small" id="selInfo"></div>
@@ -181,6 +182,7 @@
 <script src="lib/xlsx.full.min.js"></script>
 <script src="data/cantones.js"></script>
 <script src="data/distritos.js"></script>
+<script src="data/cobertura.js"></script>
 <script src="worker.js"></script>
 <script src="app.js"></script>
 </body>

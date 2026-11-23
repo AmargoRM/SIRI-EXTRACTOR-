@@ -23,6 +23,22 @@
   const DIST = window.SIRI_DISTRITOS.features;
   const provincias = Array.from(new Set(CANT.map((f) => f.properties.provincia))).sort((a, b) => a.localeCompare(b, 'es'));
 
+  // ---------- Cobertura del SIRI ----------
+  // Lista precalculada (data/cobertura.js) + lo que se detecta en esta visita con la consulta rápida.
+  const COB = (window.SIRI_COBERTURA && window.SIRI_COBERTURA.cantones) || {};
+  const COB_FECHA = window.SIRI_COBERTURA && window.SIRI_COBERTURA.generado;
+  const ckey = (prov, cant) => prov + '|' + cant;
+  const sinDatosAhora = new Set();   // la consulta rápida no encontró fincas
+  const conDatosAhora = new Set();   // la lista decía "sin datos" pero al volver a comprobar sí hay
+  function cobEstado(prov, cant) {
+    const k = ckey(prov, cant);
+    if (sinDatosAhora.has(k)) return 'sin_datos';
+    if (conDatosAhora.has(k)) return 'ok';
+    return (COB[k] && COB[k].estado) || 'desconocido';
+  }
+  const bloqueado = (p) => cobEstado(p.provincia, p.canton) === 'sin_datos';
+  const nombreCanton = (p) => p.canton + ' (' + p.provincia + ')';
+
   let mode = 'canton';
   let selected = null;      // Feature elegido
   let result = null;        // { features, summary, label, mode }
@@ -42,6 +58,7 @@
   const css = getComputedStyle(document.documentElement);
   const colArea = () => css.getPropertyValue('--area').trim() || '#1864ab';
   const colSel = () => css.getPropertyValue('--sel').trim() || '#d9480f';
+  const colOff = () => css.getPropertyValue('--off').trim() || '#868e96';
 
   let boundsLayer = null;
   let selLayer = null;
@@ -51,22 +68,43 @@
     if (boundsLayer) map.removeLayer(boundsLayer);
     const feats = mode === 'canton' ? CANT : DIST;
     boundsLayer = L.geoJSON({ type: 'FeatureCollection', features: feats }, {
-      style: () => ({ color: colArea(), weight: mode === 'canton' ? 1.2 : 0.8, fillOpacity: 0.04, fillColor: colArea() }),
+      style: (f) => bloqueado(f.properties)
+        ? { color: colOff(), weight: 0.8, dashArray: '3 4', fillOpacity: 0.28, fillColor: colOff() }
+        : { color: colArea(), weight: mode === 'canton' ? 1.2 : 0.8, fillOpacity: 0.04, fillColor: colArea() },
       onEachFeature: (f, layer) => {
         const p = f.properties;
-        layer.bindTooltip(mode === 'canton' ? p.canton + ' (' + p.provincia + ')' : p.distrito + ' · ' + p.canton, { sticky: true });
-        layer.on('click', () => { if (!runningNow) selectFeature(f, true); });
+        const est = cobEstado(p.provincia, p.canton);
+        const extra = est === 'sin_datos' ? ' · sin datos en SIRI' : est === 'parcial' ? ' · cobertura parcial' : '';
+        layer.bindTooltip((mode === 'canton' ? nombreCanton(p) : p.distrito + ' · ' + p.canton) + extra, { sticky: true });
+        layer.on('click', () => {
+          if (runningNow) return;
+          if (bloqueado(p)) { showMsg('warn', 'El SIRI no tiene fincas en el cantón ' + nombreCanton(p) + ': no se puede extraer.'); return; }
+          selectFeature(f, true);
+        });
       },
     }).addTo(map);
     if (selLayer) selLayer.bringToFront();
   }
 
   // ---------- Selectores ----------
-  function fillSelect(sel, values, placeholder) {
+  function fillSelect(sel, values, placeholder, decorate) {
     sel.innerHTML = '';
     const o = document.createElement('option');
     o.value = ''; o.textContent = placeholder; sel.appendChild(o);
-    for (const v of values) { const x = document.createElement('option'); x.value = v; x.textContent = v; sel.appendChild(x); }
+    for (const v of values) {
+      const x = document.createElement('option'); x.value = v; x.textContent = v;
+      const d = decorate && decorate(v);
+      if (d) { if (d.suffix) x.textContent += d.suffix; if (d.disabled) x.disabled = true; }
+      sel.appendChild(x);
+    }
+  }
+  function fillCantones(prov) {
+    fillSelect($('selCant'), CANT.filter((f) => f.properties.provincia === prov).map((f) => f.properties.canton), '— Cantón —', (c) => {
+      const est = cobEstado(prov, c);
+      if (est === 'sin_datos') return { disabled: true, suffix: ' — sin datos en SIRI' };
+      if (est === 'parcial') return { suffix: ' — cobertura parcial' };
+      return null;
+    });
   }
   fillSelect($('selProv'), provincias, '— Provincia —');
   fillSelect($('selCant'), [], '— Cantón —');
@@ -74,7 +112,7 @@
 
   $('selProv').onchange = () => {
     const p = $('selProv').value;
-    fillSelect($('selCant'), CANT.filter((f) => f.properties.provincia === p).map((f) => f.properties.canton), '— Cantón —');
+    fillCantones(p);
     fillSelect($('selDist'), [], '— Distrito —');
     clearSelection();
   };
@@ -128,11 +166,13 @@
   }
 
   function selectFeature(f, fromMap) {
-    selected = f;
     const p = f.properties;
+    if (bloqueado(p)) { clearSelection(); showMsg('warn', 'El SIRI no tiene fincas en el cantón ' + nombreCanton(p) + ': no se puede extraer.'); return; }
+    selected = f;
+    showMsg(null, '');
     if (fromMap) {
       $('selProv').value = p.provincia;
-      fillSelect($('selCant'), CANT.filter((x) => x.properties.provincia === p.provincia).map((x) => x.properties.canton), '— Cantón —');
+      fillCantones(p.provincia);
       $('selCant').value = p.canton;
       if (mode === 'distrito') {
         fillSelect($('selDist'), DIST.filter((x) => x.properties.provincia === p.provincia && x.properties.canton === p.canton).map((x) => x.properties.distrito), '— Distrito —');
@@ -144,7 +184,8 @@
     map.fitBounds(selLayer.getBounds(), { padding: [20, 20] });
     const km2 = areaKm2(f);
     $('selName').textContent = mode === 'canton' ? 'Cantón ' + p.canton : 'Distrito ' + p.distrito;
-    $('selInfo').textContent = (mode === 'canton' ? p.provincia : p.canton + ', ' + p.provincia) + ' · ' + km2.toLocaleString('es-CR', { maximumFractionDigits: 1 }) + ' km² · ' + guessTime(km2);
+    $('selInfo').textContent = (mode === 'canton' ? p.provincia : p.canton + ', ' + p.provincia) + ' · ' + km2.toLocaleString('es-CR', { maximumFractionDigits: 1 }) + ' km² · ' + guessTime(km2) +
+      (cobEstado(p.provincia, p.canton) === 'parcial' ? ' · Ojo: el SIRI tiene fincas solo en parte de este cantón.' : '');
     $('selCard').classList.remove('hidden');
     $('btnStart').disabled = runningNow;
   }
@@ -201,7 +242,29 @@
     return mode === 'canton' ? 'Cantón ' + p.canton + ' (' + p.provincia + ')' : 'Distrito ' + p.distrito + ', ' + p.canton + ' (' + p.provincia + ')';
   }
 
-  $('btnStart').onclick = () => {
+  $('btnStart').onclick = async () => {
+    if (!selected || runningNow) return;
+    const f = selected, p = f.properties;
+    $('btnStart').disabled = true;
+    showMsg('ok', 'Comprobando que el SIRI tenga fincas en esta zona…');
+    const r = await probarZona(f, 12);
+    if (selected !== f || runningNow) return;
+    $('btnStart').disabled = false;
+    showMsg(null, '');
+    if (r.conFinca === 0 && r.respondieron >= 8) {
+      if (mode === 'canton') {
+        sinDatosAhora.add(ckey(p.provincia, p.canton));
+        refrescarCobertura();
+        clearSelection();
+        showMsg('err', 'El SIRI no tiene fincas en el cantón ' + nombreCanton(p) + ' (ninguno de ' + r.respondieron + ' puntos de prueba cayó en una finca): no se puede extraer.');
+      } else {
+        showMsg('err', 'El SIRI no tiene fincas en el distrito ' + p.distrito + ', ' + p.canton + ' (ninguno de ' + r.respondieron + ' puntos de prueba cayó en una finca): no se puede extraer.');
+      }
+      return;
+    }
+    iniciar();
+  };
+  function iniciar() {
     if (!selected) return;
     result = null;
     if (parcelsLayer) { map.removeLayer(parcelsLayer); parcelsLayer = null; }
@@ -215,7 +278,7 @@
       opts: readOpts(),
     });
     runMeta = { label, mode, props: selected.properties, startedAt: new Date() };
-  };
+  }
   let runMeta = null;
 
   $('btnPause').onclick = () => {
@@ -459,6 +522,101 @@
     };
   }
 
+  // ---------- Consulta rápida de cobertura ----------
+  const SIRI_GFI = 'https://geop8.siri.snitcr.go.cr/GeoP/geoprox2?s=390c80aJivoGEOSIRI&SERVICE=WMS&VERSION=1.1.1' +
+    '&REQUEST=GetFeatureInfo&LAYERS=catastro_detallado&QUERY_LAYERS=catastro_detallado&STYLES=&SRS=EPSG:3857' +
+    '&WIDTH=5&HEIGHT=5&X=2&Y=2&INFO_FORMAT=application/json&FEATURE_COUNT=1';
+  const toMerc = (lon, lat) => [lon * Math.PI / 180 * 6378137, Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) * 6378137];
+  function ringHas(ring, x, y) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i], [xj, yj] = ring[j];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  }
+  function puntosAlAzar(feature, n) {
+    const polys = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    polys.forEach((poly) => poly[0].forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }));
+    const pts = [];
+    for (let g = 0; pts.length < n && g < n * 500; g++) {
+      const x = x0 + Math.random() * (x1 - x0), y = y0 + Math.random() * (y1 - y0);
+      if (polys.some((poly) => ringHas(poly[0], x, y) && !poly.slice(1).some((h) => ringHas(h, x, y)))) pts.push([x, y]);
+    }
+    return pts;
+  }
+  // Consulta hasta n puntos, de a uno; se detiene en cuanto encuentra una finca.
+  async function probarZona(feature, n) {
+    let respondieron = 0, conFinca = 0;
+    for (const [lon, lat] of puntosAlAzar(feature, n)) {
+      const [x, y] = toMerc(lon, lat);
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 20000);
+      try {
+        const r = await fetch(SIRI_GFI + '&BBOX=' + [x - 2, y - 2, x + 2, y + 2].map((v) => v.toFixed(2)).join(','), { signal: ctrl.signal, credentials: 'omit', cache: 'no-store' });
+        if (!r.ok) continue;
+        const txt = await r.text();
+        respondieron++;
+        if (txt.trim() && (JSON.parse(txt).features || []).length) { conFinca++; break; }
+      } catch (e) { /* sin respuesta: no cuenta */ } finally { clearTimeout(t); }
+    }
+    return { respondieron, conFinca };
+  }
+
+  function bloqueadosActuales() {
+    return CANT.map((f) => f.properties).filter(bloqueado).sort((a, b) => (a.provincia + a.canton).localeCompare(b.provincia + b.canton, 'es'));
+  }
+  function pintarAvisoCobertura() {
+    const box = $('cobBox');
+    const lista = bloqueadosActuales();
+    if (!lista.length) {
+      const n = Object.keys(COB).length;
+      if (!n) { box.classList.add('hidden'); return; }
+      box.className = 'msg ok small';
+      box.textContent = 'Los ' + CANT.length + ' cantones tienen fincas en el SIRI' + (COB_FECHA ? ' (revisado el ' + COB_FECHA + ')' : '') +
+        '. Igual, antes de empezar la página comprueba que la zona elegida tenga fincas.';
+      return;
+    }
+    box.className = 'msg warn';
+    box.innerHTML = '';
+    const t = document.createElement('div');
+    t.innerHTML = '<b>' + lista.length + (lista.length === 1 ? ' cantón no tiene' : ' cantones no tienen') + ' fincas en el SIRI</b> y no se ' +
+      (lista.length === 1 ? 'puede' : 'pueden') + ' elegir (en gris en el mapa):';
+    const ul = document.createElement('div');
+    ul.className = 'small'; ul.style.margin = '4px 0';
+    ul.textContent = lista.map(nombreCanton).join(' · ');
+    box.append(t, ul);
+    const pie = document.createElement('div');
+    pie.className = 'small muted';
+    pie.textContent = COB_FECHA ? 'Lista revisada el ' + COB_FECHA + '. ' : '';
+    const b = document.createElement('button');
+    b.className = 'b'; b.id = 'btnCobRecheck'; b.textContent = 'Volver a comprobar';
+    b.style.marginTop = '6px';
+    b.onclick = volverAComprobar;
+    box.append(pie, b);
+  }
+  function refrescarCobertura() {
+    const prov = $('selProv').value, cant = $('selCant').value;
+    if (prov) { fillCantones(prov); $('selCant').value = cant; if ($('selCant').selectedOptions[0] && $('selCant').selectedOptions[0].disabled) $('selCant').value = ''; }
+    drawBoundaries();
+    pintarAvisoCobertura();
+  }
+  async function volverAComprobar() {
+    const b = $('btnCobRecheck');
+    const lista = bloqueadosActuales();
+    let i = 0, hallados = [];
+    for (const p of lista) {
+      if (b) { b.disabled = true; b.textContent = 'Comprobando ' + (++i) + ' de ' + lista.length + '…'; }
+      const f = CANT.find((x) => x.properties.provincia === p.provincia && x.properties.canton === p.canton);
+      const r = await probarZona(f, 8);
+      if (r.conFinca > 0) { const k = ckey(p.provincia, p.canton); sinDatosAhora.delete(k); conDatosAhora.add(k); hallados.push(nombreCanton(p)); }
+    }
+    refrescarCobertura();
+    showMsg(hallados.length ? 'ok' : null, hallados.length ? 'Ahora sí hay fincas en: ' + hallados.join(', ') + '. Ya se pueden elegir.' : '');
+    if (!hallados.length) { const bb = $('btnCobRecheck'); if (bb) bb.textContent = 'Comprobado: siguen sin fincas'; }
+  }
+
   function showMsg(kind, text) {
     const b = $('msgBox');
     b.innerHTML = '';
@@ -471,5 +629,6 @@
   window.addEventListener('beforeunload', (e) => { if (runningNow) { e.preventDefault(); e.returnValue = ''; } });
 
   drawBoundaries();
+  pintarAvisoCobertura();
   checkResume();
 })();
