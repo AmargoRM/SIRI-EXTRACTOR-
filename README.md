@@ -1,3 +1,53 @@
+# SIRI EXTRACTOR
+
+Este repositorio tiene dos herramientas:
+
+1. **Página web** (`web/`, recomendada): se elige un cantón o distrito en un mapa y se descargan sus predios en GeoJSON y Excel. Corre completa en el navegador, sin instalar nada.
+2. **CLI en Python** (`main.py`, versión original): extracción por muestreo de puntos. Se documenta más abajo.
+
+## Página web (`web/`)
+
+### Cómo abrirla
+
+- **Publicada en GitHub Pages**: el flujo `.github/workflows/pages.yml` publica la carpeta `web/` cada vez que cambia en `main`. Hay que activarlo una sola vez en GitHub: *Settings → Pages → Build and deployment → Source: GitHub Actions*. La dirección queda como `https://<usuario>.github.io/SIRI-EXTRACTOR-/`.
+- **Sin publicar**: descargar el repositorio y abrir `web/index.html` con doble clic (Chrome, Edge o Firefox).
+
+### Uso
+
+1. Elegir **Cantón** o **Distrito**, y luego la zona en las listas o con clic en el mapa.
+2. Presionar **Iniciar extracción**. Se puede cambiar de pestaña, pero no hay que cerrarla. El avance se guarda cada minuto en el navegador; si se cierra, al volver aparece la opción **Reanudar**.
+3. Al terminar, elegir el sistema de coordenadas (Lambert Norte, CRTM05 o WGS84) y descargar el **GeoJSON** o el **Excel**. Durante la extracción, **Parcial** descarga lo que lleve hasta ese momento.
+
+### Cómo extrae
+
+- Pide al WMS público del SIRI el mapa de cada cuadro en formato **KML vectorial** (`GetMap`, capa `catastro_detallado`, `kmscore:100`). GeoServer devuelve **todas** las fincas que tocan el cuadro, con su geometría completa y todos sus atributos.
+- Empieza con cuadros de 1 km. Si el servidor no alcanza a responder un cuadro (zona urbana densa, más de 75 s) o devuelve ~1000 fincas (posible tope), ese cuadro se divide en 4 y se vuelve a pedir. Los cuadros vecinos del mismo tamaño se dividen directamente, sin volver a esperar.
+- Si casi todas las respuestas recientes fallan, el problema es el servidor y no la densidad. En ese caso la página espera (1, 2 y hasta 5 minutos), reintenta sola y lo avisa en pantalla. Los cuadros que fallan 4 veces quedan anotados, y al final aparece el botón **Reintentar cuadros fallidos**.
+- Al final hace una **verificación independiente**: consulta puntos al azar con `GetFeatureInfo` (el método de la CLI) y cuenta cuántas de esas fincas ya estaban descargadas.
+- **Filtro de salida** (por defecto): se conservan las fincas cuyo código catastral (`provincia`-`canton`[-`distrito`]) coincide con el código predominante de la zona elegida. Los límites dibujados (geoBoundaries: cantones 2020, distritos 2017 de OpenStreetMap) son aproximados y solo sirven para elegir la zona y buscar con un margen de 300 m. No aparece el cantón de Monteverde (creado en 2021): queda dentro de Puntarenas.
+
+### Pruebas realizadas (noviembre 2026)
+
+En un cuadro de 200 × 200 m en Heredia centro, la "verdad" se construyó con 121 consultas `GetFeatureInfo` a 1 m/píxel: 154 fincas. El KML devolvió las 154, más 1 adicional, y con más vértices: el JSON de `GetFeatureInfo` viene simplificado. El truco de consultar un solo píxel grande se descartó: perdía entre 1 % y 40 % de las fincas, de forma impredecible.
+
+### Tiempos
+
+El cuello de botella es el servidor del SIRI, y su velocidad varía mucho según la hora y la carga. Como referencia, en las pruebas un cuadro urbano de 500 m (~400 fincas) tardó entre 7 s y más de 75 s. Un distrito urbano pequeño (0,6 km², 1.225 fincas) tomó unos 30 minutos en un momento de servidor lento. Un cantón grande puede tomar varias horas: conviene dejar la pestaña abierta, porque el avance se guarda solo.
+
+### Exactitud de coordenadas
+
+- CRTM05 (`EPSG:5367`): diferencia menor a 0,2 m respecto de PROJ/pyproj.
+- Lambert Norte (`EPSG:5456`, datum Ocotepeque 1935): usa la transformación EPSG de 3 parámetros (exactitud nominal ~8 m). Difiere ~1 m de la transformación de 7 parámetros que usa QGIS por defecto. Para trabajo de precisión, conviene descargar en CRTM05 o WGS84 y reproyectar en QGIS.
+
+### Archivos
+
+- `web/index.html`, `web/app.js`: interfaz.
+- `web/worker.js`: motor de extracción, que corre en segundo plano (Web Worker).
+- `web/data/`: límites de cantones y distritos (geoBoundaries, licencias CC0 y ODbL).
+- `web/lib/`: Leaflet 1.9.4, proj4 2.11.0, SheetJS 0.18.5 (copias locales).
+
+---
+
 # Version 1 SIRI EXTRACTOR CLI
 
 Herramienta Python de consola para extraer predios por cantón mediante **WMS GetFeatureInfo** del SIRI/SNIT, usando un límite cantonal provisto por el usuario. La salida principal se exporta a GeoJSON en **Lambert Norte (`EPSG:5456`)** y, opcionalmente, a GeoPackage.
