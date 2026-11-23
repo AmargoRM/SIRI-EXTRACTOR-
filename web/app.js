@@ -252,19 +252,15 @@
     $('btnStart').disabled = false;
     showMsg(null, '');
     if (r.conFinca === 0 && r.respondieron >= 8) {
-      const est = cobEstado(p.provincia, p.canton);
-      if (mode === 'canton' && est !== 'ok' && est !== 'parcial') {
+      if (mode === 'canton') {
         sinDatosAhora.add(ckey(p.provincia, p.canton));
         refrescarCobertura();
         clearSelection();
-        showMsg('err', 'El SIRI no tiene fincas en el cantón ' + nombreCanton(p) + ': no se puede extraer.');
-        return;
+        showMsg('err', 'El SIRI no tiene fincas en el cantón ' + nombreCanton(p) + ' (ninguno de ' + r.respondieron + ' puntos de prueba cayó en una finca): no se puede extraer.');
+      } else {
+        showMsg('err', 'El SIRI no tiene fincas en el distrito ' + p.distrito + ', ' + p.canton + ' (ninguno de ' + r.respondieron + ' puntos de prueba cayó en una finca): no se puede extraer.');
       }
-      if (mode === 'distrito' && est !== 'ok' && est !== 'parcial') {
-        showMsg('err', 'El SIRI no tiene fincas en el distrito ' + p.distrito + ' (' + p.canton + '): no se puede extraer.');
-        return;
-      }
-      if (!confirm('No encontré fincas en ' + r.respondieron + ' puntos de prueba de esta zona. Puede que el SIRI no tenga mapa catastral acá. ¿Extraer igual?')) return;
+      return;
     }
     iniciar();
   };
@@ -574,8 +570,15 @@
   function pintarAvisoCobertura() {
     const box = $('cobBox');
     const lista = bloqueadosActuales();
-    if (!lista.length) { box.classList.add('hidden'); return; }
-    box.classList.remove('hidden');
+    if (!lista.length) {
+      const n = Object.keys(COB).length;
+      if (!n) { box.classList.add('hidden'); return; }
+      box.className = 'msg ok small';
+      box.textContent = 'Los ' + CANT.length + ' cantones tienen fincas en el SIRI' + (COB_FECHA ? ' (revisado el ' + COB_FECHA + ')' : '') +
+        '. Igual, antes de empezar la página comprueba que la zona elegida tenga fincas.';
+      return;
+    }
+    box.className = 'msg warn';
     box.innerHTML = '';
     const t = document.createElement('div');
     t.innerHTML = '<b>' + lista.length + (lista.length === 1 ? ' cantón no tiene' : ' cantones no tienen') + ' fincas en el SIRI</b> y no se ' +
