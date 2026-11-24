@@ -26,6 +26,7 @@ Este repositorio tiene dos herramientas:
 - Al final hace una **verificación independiente**: consulta puntos al azar con `GetFeatureInfo` (el método de la CLI) y cuenta cuántas de esas fincas ya estaban descargadas.
 - **Filtro de salida** (por defecto): se conservan las fincas cuyo código catastral (`provincia`-`canton`[-`distrito`]) coincide con el código predominante de la zona elegida. Los límites dibujados (geoBoundaries: cantones 2020, distritos 2017 de OpenStreetMap) son aproximados y solo sirven para elegir la zona y buscar con un margen de 300 m. No aparece el cantón de Monteverde (creado en 2021): queda dentro de Puntarenas.
 - **Cobertura**: `web/data/cobertura.js` dice qué cantones tienen fincas en el SIRI (medición del 2026-11-23: los 83 tienen). Los que no tengan aparecen en gris y no se pueden elegir. Además, antes de empezar la página consulta hasta 12 puntos al azar de la zona y no arranca si ninguno cae en una finca. Para actualizar la lista: `python tools/cobertura.py` (necesita acceso al servidor del SIRI).
+- **Todo el país**: el botón *Descargar todo el país* baja los cantones uno tras otro (orden alfabético por provincia) y descarga el GeoJSON de cada uno al terminar (y el Excel si se marca la casilla), en el sistema de coordenadas elegido. El avance queda guardado en el navegador: si se cierra la página, al volver aparece *Continuar* desde el cantón donde iba. Usa la misma concurrencia baja que una extracción normal y espera 5 s entre cantones. Puede tardar días.
 
 ### Pruebas realizadas (noviembre 2026)
 
