@@ -18,16 +18,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  # Dos trabajos separados (como la plantilla oficial de GitHub): si "deploy" corre en el
+  # mismo trabajo justo después de subir el paquete, a veces GitHub todavía no lo ve
+  # ("No artifacts named github-pages") y la publicación falla.
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v4
