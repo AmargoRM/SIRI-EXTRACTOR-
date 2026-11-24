@@ -77,7 +77,7 @@
         const extra = est === 'sin_datos' ? ' · sin datos en SIRI' : est === 'parcial' ? ' · cobertura parcial' : '';
         layer.bindTooltip((mode === 'canton' ? nombreCanton(p) : p.distrito + ' · ' + p.canton) + extra, { sticky: true });
         layer.on('click', () => {
-          if (runningNow) return;
+          if (runningNow || paisActivo()) return;
           if (bloqueado(p)) { showMsg('warn', 'El SIRI no tiene fincas en el cantón ' + nombreCanton(p) + ': no se puede extraer.'); return; }
           selectFeature(f, true);
         });
@@ -136,7 +136,7 @@
 
   document.querySelectorAll('#modeSeg button').forEach((b) => {
     b.onclick = () => {
-      if (runningNow) return;
+      if (runningNow || paisActivo()) return;
       mode = b.dataset.mode;
       document.querySelectorAll('#modeSeg button').forEach((x) => x.classList.toggle('on', x === b));
       $('distWrap').classList.toggle('hidden', mode !== 'distrito');
@@ -213,9 +213,10 @@
       case 'checkpoint': $('progBox').dataset.ck = m.savedAt; break;
       case 'recovered': showMsg('ok', 'El servidor volvió a responder; la extracción continúa.'); break;
       case 'warn': showMsg('warn', m.message); if (/en pausa/.test(m.message)) $('btnPause').textContent = 'Reanudar'; break;
-      case 'error': showMsg('err', 'Error: ' + m.message); setRunning(false); break;
+      case 'error': showMsg('err', 'Error: ' + m.message); setRunning(false); if (pais) pausarPais(); break;
       case 'cancelled':
         setRunning(false);
+        if (pais) { pausarPais(); showMsg('warn', 'Descarga del país detenida. Lo ya descargado quedó en tu carpeta de descargas; podés continuar luego desde el cantón donde iba.'); break; }
         showMsg('warn', 'Extracción detenida. El avance quedó guardado: podés reanudarla luego o descargar lo parcial.');
         checkResume();
         break;
@@ -297,7 +298,7 @@
     $('btnCancel').disabled = !on;
     $('btnPartial').disabled = !on;
     $('btnPause').textContent = 'Pausar';
-    ['selProv', 'selCant', 'selDist', 'optFilter', 'optConc', 'optBuffer', 'optVerify'].forEach((id) => { $(id).disabled = on; });
+    ['selProv', 'selCant', 'selDist', 'optFilter', 'optConc', 'optBuffer', 'optVerify', 'btnPais', 'optCrs', 'optPaisXls'].forEach((id) => { if ($(id)) $(id).disabled = on || paisActivo(); });
     if (on) { $('progBox').classList.remove('hidden'); showMsg(null, ''); }
     document.title = on ? 'Extrayendo… · SIRI Extractor Web' : 'SIRI Extractor Web';
   }
@@ -328,6 +329,7 @@
   function onDone(m) {
     setRunning(false);
     result = { features: m.features, summary: m.summary, label: m.label, mode: m.mode, finishedAt: new Date() };
+    if (pais && pais.corriendo) { cantonPaisListo(m); return; }
     $('pBar').style.width = '100%';
     $('pPhase').textContent = 'Listo';
     $('pPhaseSub').textContent = '';
@@ -506,7 +508,8 @@
   function checkResume() { worker.postMessage({ cmd: 'checkpoint-info' }); }
   function onCheckpointInfo(m) {
     const box = $('resumeBox');
-    if (!m.exists || runningNow) { box.classList.add('hidden'); return; }
+    ultimoCk = m.exists ? m : null;
+    if (!m.exists || runningNow || pais) { box.classList.add('hidden'); return; }
     box.innerHTML = (result && result.summary.cuadros_fallidos ? 'Quedaron cuadros sin descargar en ' : 'Hay una extracción sin terminar: ') + '<b>' + escapeHtml(m.label) + '</b> (' + fmt(m.features) + ' fincas, guardada ' +
       new Date(m.savedAt).toLocaleString('es-CR') + ').<div class="btns"><button class="b primary" id="btnResumeCk">' + (result && result.summary.cuadros_fallidos ? 'Reintentar cuadros fallidos' : 'Reanudar') + '</button>' +
       '<button class="b" id="btnDiscardCk">Descartar</button></div>';
@@ -617,6 +620,105 @@
     if (!hallados.length) { const bb = $('btnCobRecheck'); if (bb) bb.textContent = 'Comprobado: siguen sin fincas'; }
   }
 
+  // ---------- Todo el país, cantón por cantón ----------
+  // El avance se guarda en localStorage: lista de cantones, índice actual y lo terminado.
+  // Cada cantón se descarga solo al terminar y se libera de memoria antes de seguir.
+  const PAIS_KEY = 'siri_pais_v1';
+  let pais = null;          // { lista, i, hechos, crs, excel, inicio, corriendo }
+  let ultimoCk = null;      // info del guardado parcial del motor (el cantón en curso)
+  const paisActivo = () => !!(pais && pais.corriendo);
+  function guardarPais() {
+    try { if (pais) localStorage.setItem(PAIS_KEY, JSON.stringify(Object.assign({}, pais, { corriendo: false }))); else localStorage.removeItem(PAIS_KEY); } catch (e) { /* sin almacenamiento */ }
+  }
+  function leerPais() { try { return JSON.parse(localStorage.getItem(PAIS_KEY) || 'null'); } catch (e) { return null; } }
+  const featCanton = (k) => CANT.find((f) => ckey(f.properties.provincia, f.properties.canton) === k);
+  const labelCanton = (p) => 'Cantón ' + p.canton + ' (' + p.provincia + ')';
+
+  function pintarPais() {
+    const box = $('paisBox');
+    if (!pais) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    const total = pais.lista.length, listos = pais.hechos.length;
+    const actual = pais.i < total ? featCanton(pais.lista[pais.i]) : null;
+    const fallidos = pais.hechos.filter((h) => h.fallidos > 0);
+    let html = '<b>Todo el país:</b> ' + listos + ' de ' + total + ' cantones listos' +
+      (pais.hechos.length ? ' · ' + fmt(pais.hechos.reduce((a, h) => a + (h.fincas || 0), 0)) + ' fincas' : '') + '.';
+    if (actual) html += '<br>' + (pais.corriendo ? 'Descargando: ' : 'Sigue: ') + '<b>' + escapeHtml(nombreCanton(actual.properties)) + '</b>';
+    if (fallidos.length) html += '<br><span class="small">Con cuadros sin descargar (repetir después a mano): ' + fallidos.map((h) => escapeHtml(h.nombre)).join(', ') + '</span>';
+    html += '<div class="bar"><div style="width:' + (100 * listos / total).toFixed(1) + '%"></div></div>';
+    if (!pais.corriendo) {
+      html += '<div class="btns">' + (actual ? '<button class="b primary" id="btnPaisSeguir">Continuar</button>' : '') +
+        '<button class="b" id="btnPaisCerrar">' + (actual ? 'Abandonar' : 'Cerrar') + '</button></div>';
+    }
+    box.innerHTML = html;
+    if ($('btnPaisSeguir')) $('btnPaisSeguir').onclick = () => { pais.corriendo = true; siguientePais(true); };
+    if ($('btnPaisCerrar')) $('btnPaisCerrar').onclick = () => {
+      if (actual && !confirm('¿Abandonar la descarga del país? Lo ya descargado queda en tu carpeta, pero se pierde el registro de por dónde iba.')) return;
+      pais = null; guardarPais(); pintarPais(); setRunning(false);
+    };
+  }
+
+  $('btnPais').onclick = () => {
+    if (runningNow || paisActivo()) return;
+    const lista = CANT.map((f) => f.properties).filter((p) => !bloqueado(p))
+      .sort((a, b) => (a.provincia + a.canton).localeCompare(b.provincia + b.canton, 'es')).map((p) => ckey(p.provincia, p.canton));
+    const msg = 'Se van a descargar ' + lista.length + ' cantones, uno tras otro. Cada uno baja solo su archivo al terminar.\n\n' +
+      '• Puede tardar varios días, según el servidor del SIRI.\n' +
+      '• Dejá esta pestaña abierta. Si se cierra, al volver podés continuar desde el cantón donde iba.\n' +
+      '• El navegador puede preguntar si permitís descargar varios archivos: aceptá.\n\n¿Empezar?';
+    if (!confirm(msg)) return;
+    pais = { lista, i: 0, hechos: [], crs: $('optCrs').value, excel: $('optPaisXls').checked, inicio: new Date().toISOString(), corriendo: true };
+    guardarPais();
+    siguientePais(false);
+  };
+
+  function siguientePais(continuando) {
+    if (!pais) return;
+    if (pais.i >= pais.lista.length) {
+      pais.corriendo = false; guardarPais(); pintarPais(); setRunning(false);
+      showMsg('ok', 'Descarga del país terminada: ' + pais.hechos.length + ' cantones, ' + fmt(pais.hechos.reduce((a, h) => a + (h.fincas || 0), 0)) + ' fincas. Los archivos están en tu carpeta de descargas.');
+      return;
+    }
+    const f = featCanton(pais.lista[pais.i]);
+    if (!f || bloqueado(f.properties)) { pais.i++; guardarPais(); return siguientePais(false); }
+    // Modo cantón, sin dibujar ni pedir confirmaciones.
+    if (mode !== 'canton') {
+      mode = 'canton';
+      document.querySelectorAll('#modeSeg button').forEach((x) => x.classList.toggle('on', x.dataset.mode === 'canton'));
+      $('distWrap').classList.add('hidden');
+      drawBoundaries();
+    }
+    if (parcelsLayer) { map.removeLayer(parcelsLayer); parcelsLayer = null; }
+    result = null;
+    selectFeature(f, true);
+    pintarPais();
+    // Si el motor tiene guardado este mismo cantón a medias, se retoma desde ahí.
+    if (continuando && ultimoCk && ultimoCk.label === labelCanton(f.properties)) {
+      runMeta = { label: ultimoCk.label, mode: 'canton', props: f.properties, startedAt: new Date() };
+      setRunning(true);
+      worker.postMessage({ cmd: 'resume-checkpoint' });
+    } else {
+      iniciar();
+    }
+  }
+
+  function cantonPaisListo(m) {
+    const f = featCanton(pais.lista[pais.i]);
+    const nombre = f ? nombreCanton(f.properties) : m.label;
+    try {
+      download(geojsonBlob(m.features, pais.crs), 'siri_' + slug(m.label) + '_' + CRS_LABEL[pais.crs].replace(/ /g, '_') + '_' + stamp() + '.geojson');
+      if (pais.excel) { const prev = $('optCrs').value; $('optCrs').value = pais.crs; buildExcel(); $('optCrs').value = prev; }
+    } catch (e) { showMsg('err', 'No se pudo guardar el archivo de ' + nombre + ': ' + e.message); }
+    pais.hechos.push({ key: pais.lista[pais.i], nombre, fincas: m.features.length, fallidos: m.summary.cuadros_fallidos || 0 });
+    pais.i++;
+    result = null; // libera memoria antes del próximo cantón
+    guardarPais();
+    pintarPais();
+    setTimeout(() => { if (pais && pais.corriendo) siguientePais(false); }, 5000); // pausa entre cantones
+  }
+
+  function pausarPais() { if (!pais) return; pais.corriendo = false; guardarPais(); pintarPais(); setRunning(false); }
+
   function showMsg(kind, text) {
     const b = $('msgBox');
     b.innerHTML = '';
@@ -626,9 +728,12 @@
     b.appendChild(d);
   }
 
-  window.addEventListener('beforeunload', (e) => { if (runningNow) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', (e) => { if (runningNow || paisActivo()) { e.preventDefault(); e.returnValue = ''; } });
 
   drawBoundaries();
   pintarAvisoCobertura();
+  pais = leerPais();
+  if (pais) { pais.corriendo = false; if (pais.i >= pais.lista.length && !pais.hechos.length) pais = null; }
+  pintarPais();
   checkResume();
 })();
